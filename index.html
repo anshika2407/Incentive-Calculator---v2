@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incentive Calculator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #f5f7fa; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; color: #1a2332; padding: 16px; padding-bottom: 110px; max-width: 640px; margin: 0 auto; line-height: 1.4; }
+  h1 { font-size: 22px; margin-bottom: 4px; color: #0f2557; }
+  .subtitle { font-size: 13px; color: #5c6b80; margin-bottom: 18px; }
+  .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .card h2 { font-size: 15px; color: #0f2557; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .badge { background: #0f2557; color: white; font-size: 12px; padding: 2px 9px; border-radius: 10px; font-weight: 600; min-width: 24px; text-align: center; }
+  label { display: block; font-size: 12px; color: #5c6b80; margin-bottom: 4px; font-weight: 500; }
+  input, select { width: 100%; padding: 11px 12px; font-size: 16px; border: 1px solid #d6dce6; border-radius: 8px; background: white; color: #1a2332; font-family: inherit; }
+  input:focus, select:focus { outline: none; border-color: #0f2557; box-shadow: 0 0 0 2px rgba(15,37,87,0.1); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  .file-card { background: #f7f9fc; border: 1px solid #e4e9f2; border-radius: 10px; padding: 12px 12px 10px 12px; margin-bottom: 10px; position: relative; }
+  .file-no { font-size: 11px; color: #5c6b80; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .delete-btn { position: absolute; top: 6px; right: 6px; background: none; border: none; color: #b04030; font-size: 22px; cursor: pointer; padding: 4px 10px; line-height: 1; }
+  .add-btn { width: 100%; padding: 12px; background: white; border: 2px dashed #0f2557; color: #0f2557; font-size: 14px; font-weight: 600; border-radius: 10px; cursor: pointer; }
+  .add-btn:active { background: #f0f4fa; }
+  .calc-btn { position: fixed; bottom: 12px; left: 16px; right: 16px; max-width: 608px; margin: 0 auto; padding: 16px; background: #0f2557; color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(15,37,87,0.3); }
+  .calc-btn:active { background: #1a3370; }
+  .results { background: linear-gradient(135deg, #0f2557 0%, #1f3d7a 100%); color: white; border-radius: 12px; padding: 20px; margin-bottom: 14px; }
+  .results-label { font-size: 12px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+  .total-amt { font-size: 34px; font-weight: 700; margin: 6px 0 10px 0; letter-spacing: -0.5px; }
+  .breakdown { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .bd-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eef2f7; font-size: 14px; gap: 8px; }
+  .bd-row:last-child { border-bottom: none; }
+  .bd-row.sub { padding: 4px 0 4px 14px; color: #5c6b80; font-size: 12.5px; border-bottom: none; }
+  .bd-row.total { font-weight: 700; color: #0f2557; padding-top: 12px; font-size: 16px; border-top: 2px solid #0f2557; margin-top: 8px; }
+  .bd-row strong { font-weight: 600; color: #1a2332; }
+  .reset-btn { width: 100%; padding: 10px; background: white; border: 1px solid #d6dce6; color: #5c6b80; border-radius: 8px; font-size: 13px; cursor: pointer; margin-bottom: 8px; }
+  .ach-pill { display: inline-block; padding: 4px 11px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .ach-good { background: #1f7a4a; }
+  .ach-warn { background: #b87333; }
+  .empty { color: #8898ab; font-size: 13px; text-align: center; padding: 14px 0; }
+  .footer-note { font-size: 11px; color: #8898ab; text-align: center; margin-top: 4px; }
+  @media (max-width: 360px) {
+    .row { grid-template-columns: 1fr; }
+    .total-amt { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+  <h1>Incentive Calculator</h1>
+  <p class="subtitle">Enter your monthly target, fresh files, and previous-month files. All amounts in lakhs (₹ lac); decimals allowed.</p>
+
+  <div class="card">
+    <h2>Monthly target</h2>
+    <label>Target (₹ lac)</label>
+    <input type="number" id="target" step="0.01" min="0" inputmode="decimal" placeholder="e.g. 45">
+  </div>
+
+  <div class="card">
+    <h2><span>Fresh files disbursed</span> <span class="badge" id="fresh-count">0</span></h2>
+    <div id="fresh-list"></div>
+    <button class="add-btn" onclick="addFresh()">+ Add fresh file</button>
+  </div>
+
+  <div class="card">
+    <h2><span>Tranches from files sanctioned in prior months</span> <span class="badge" id="prev-count">0</span></h2>
+    <div id="prev-list"></div>
+    <button class="add-btn" onclick="addPrev()">+ Add previous-month file</button>
+  </div>
+
+  <div class="card">
+    <h2>Logins this month</h2>
+    <label>Number of logins done this month</label>
+    <input type="number" id="logins" min="0" step="1" inputmode="numeric" placeholder="e.g. 8">
+  </div>
+
+  <div id="results"></div>
+
+  <button class="reset-btn" onclick="resetAll()">Reset all entries</button>
+  <p class="footer-note">Your data is saved locally on this device only.</p>
+
+  <button class="calc-btn" onclick="calculate()">Calculate incentive</button>
+
+<script>
+/* ============================================================
+   INCENTIVE RULES (codified from "Incentive rules.docx" + grid image)
+   ============================================================ */
+
+// Component 1: per-file incentive grid
+//   key = total fresh-file count N (capped at 6; rows 6-26 are flat)
+//   value = [Direct HL, Direct LAP, Conn/DSA HL, Conn/DSA LAP]
+const T1 = {
+  1: [0, 0, 0, 0],
+  2: [750, 375, 375, 188],
+  3: [1000, 500, 500, 250],
+  4: [1200, 600, 600, 300],
+  5: [1500, 750, 750, 375],
+  6: [2000, 1000, 1000, 500]  // applies to N >= 6
+};
+
+// Component 2: bonus per fresh docket with sanction >= 25 lac
+const T2 = {
+  'Direct-HL':    2000,
+  'Direct-LAP':   1000,
+  'Connector-HL': 0, 'Connector-LAP': 0,
+  'DSA-HL':       0, 'DSA-LAP':       0
+};
+
+// Component 4: login incentive slabs (Direct column only — applies to all logins)
+// minFresh = required count of fresh files disbursed to use this slab; else drop one slab
+const LOGIN_SLABS = [
+  { name: '1-2 logins', minN: 1,  maxN: 2,         rate: 100,  minFresh: 0 },
+  { name: '3 logins',   minN: 3,  maxN: 3,         rate: 200,  minFresh: 0 },
+  { name: '4 logins',   minN: 4,  maxN: 4,         rate: 300,  minFresh: 1 },
+  { name: '5-7 logins', minN: 5,  maxN: 7,         rate: 500,  minFresh: 1 },
+  { name: '8-10 logins',minN: 8,  maxN: 10,        rate: 700,  minFresh: 1 },
+  { name: '11+ logins', minN: 11, maxN: Infinity,  rate: 1000, minFresh: 2 }
+];
+
+// Component 3: disbursement incentive grid
+// Bands are in ₹ lac; bands marked pct:true apply % to the bucket disbursement
+const BANDS = [
+  { key: '<5',     min: 0,   max: 5 },
+  { key: '5-10',   min: 5,   max: 10 },
+  { key: '10-15',  min: 10,  max: 15 },
+  { key: '15-20',  min: 15,  max: 20 },
+  { key: '20-25',  min: 20,  max: 25 },
+  { key: '25-35',  min: 25,  max: 35 },
+  { key: '35-45',  min: 35,  max: 45 },
+  { key: '45-55',  min: 45,  max: 55 },
+  { key: '55-65',  min: 55,  max: 65 },
+  { key: '65-75',  min: 65,  max: 75 },
+  { key: '75-100', min: 75,  max: 100,      pct: true },
+  { key: '100-125',min: 100, max: 125,      pct: true },
+  { key: '>125',   min: 125, max: Infinity, pct: true }
+];
+
+// Values per (target-half) x (source) x (band index)
+// Absolute amounts for bands <75 lac; decimal % for bands >=75 lac; 'NA' = no incentive
+const T3 = {
+  gte100: {
+    Direct:    [300, 1000, 2500, 4000, 7000, 10500, 15000, 22000, 30000, 40000, 0.0060, 0.0065, 0.0070],
+    Connector: [200,  500, 1600, 2600, 4600,  7000,  9800, 14700, 20000, 26000, 0.0038, 0.0042, 0.0045],
+    DSA:       [150,  500, 1250, 2000, 3500,  5250,  7500, 11000, 15000, 20000, 0.0030, 0.0033, 0.0035]
+  },
+  lt100: {
+    Direct:    [200, 700, 1750, 2800, 5000, 7250, 11000, 'NA','NA','NA','NA','NA','NA'],
+    Connector: [200, 500, 1100, 1800, 3200, 5000,  7250, 'NA','NA','NA','NA','NA','NA'],
+    DSA:       [100, 350,  875, 1400, 2450, 3700,  5250, 'NA','NA','NA','NA','NA','NA']
+  }
+};
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let fresh = [];
+let prev = [];
+
+function addFresh() {
+  fresh.push({ source: 'Direct', product: 'HL', sanction: '', disbursed: '' });
+  render(); save();
+}
+function addPrev() {
+  prev.push({ source: 'Direct', disbursed: '' });
+  render(); save();
+}
+function removeFresh(i) { fresh.splice(i, 1); render(); save(); }
+function removePrev(i)  { prev.splice(i, 1);  render(); save(); }
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render() {
+  document.getElementById('fresh-count').textContent = fresh.length;
+  document.getElementById('prev-count').textContent  = prev.length;
+
+  const fl = document.getElementById('fresh-list');
+  fl.innerHTML = fresh.length === 0
+    ? '<div class="empty">No fresh files added yet</div>'
+    : fresh.map((f, i) => `
+      <div class="file-card">
+        <div class="file-no">Fresh file #${i + 1}</div>
+        <button class="delete-btn" onclick="removeFresh(${i})" aria-label="Remove">×</button>
+        <div class="row">
+          <div>
+            <label>Source</label>
+            <select onchange="fresh[${i}].source=this.value; save()">
+              <option value="Direct"${f.source === 'Direct' ? ' selected' : ''}>Direct</option>
+              <option value="Connector"${f.source === 'Connector' ? ' selected' : ''}>Connector</option>
+              <option value="DSA"${f.source === 'DSA' ? ' selected' : ''}>DSA</option>
+            </select>
+          </div>
+          <div>
+            <label>Product</label>
+            <select onchange="fresh[${i}].product=this.value; save()">
+              <option value="HL"${f.product === 'HL' ? ' selected' : ''}>HL</option>
+              <option value="LAP"${f.product === 'LAP' ? ' selected' : ''}>LAP</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Sanction (₹ lac)</label>
+            <input type="number" step="0.01" min="0" inputmode="decimal" value="${f.sanction}" oninput="fresh[${i}].sanction=this.value; save()" placeholder="e.g. 30">
+          </div>
+          <div>
+            <label>Disbursed (₹ lac)</label>
+            <input type="number" step="0.01" min="0" inputmode="decimal" value="${f.disbursed}" oninput="fresh[${i}].disbursed=this.value; save()" placeholder="e.g. 25">
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+  const pl = document.getElementById('prev-list');
+  pl.innerHTML = prev.length === 0
+    ? '<div class="empty">No previous-month files added yet</div>'
+    : prev.map((p, i) => `
+      <div class="file-card">
+        <div class="file-no">Previous file #${i + 1}</div>
+        <button class="delete-btn" onclick="removePrev(${i})" aria-label="Remove">×</button>
+        <div class="row">
+          <div>
+            <label>Source</label>
+            <select onchange="prev[${i}].source=this.value; save()">
+              <option value="Direct"${p.source === 'Direct' ? ' selected' : ''}>Direct</option>
+              <option value="Connector"${p.source === 'Connector' ? ' selected' : ''}>Connector</option>
+              <option value="DSA"${p.source === 'DSA' ? ' selected' : ''}>DSA</option>
+            </select>
+          </div>
+          <div>
+            <label>Disbursed (₹ lac)</label>
+            <input type="number" step="0.01" min="0" inputmode="decimal" value="${p.disbursed}" oninput="prev[${i}].disbursed=this.value; save()" placeholder="e.g. 10">
+          </div>
+        </div>
+      </div>
+    `).join('');
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function inrFmt(n) {
+  if (n === null || n === undefined || isNaN(n)) return '₹0';
+  n = Math.round(n);
+  const sign = n < 0 ? '-' : '';
+  const s = Math.abs(n).toString();
+  const last3 = s.slice(-3);
+  const rest = s.slice(0, -3);
+  const formatted = rest
+    ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3
+    : last3;
+  return sign + '₹' + formatted;
+}
+
+function findBandIdx(amtLac) {
+  for (let i = 0; i < BANDS.length; i++) {
+    if (amtLac >= BANDS[i].min && amtLac < BANDS[i].max) return i;
+  }
+  return BANDS.length - 1;
+}
+
+/* ============================================================
+   CALCULATE
+   ============================================================ */
+function calculate() {
+  const target = parseFloat(document.getElementById('target').value) || 0;
+
+  const F = fresh.map(f => ({
+    source:   f.source,
+    product:  f.product,
+    sanction: parseFloat(f.sanction)  || 0,
+    disbursed:parseFloat(f.disbursed) || 0
+  }));
+  const P = prev.map(p => ({
+    source:   p.source,
+    disbursed:parseFloat(p.disbursed) || 0
+  }));
+
+  // ---------- Component 1 ----------
+  const N = F.length;
+  const row = N === 0 ? 1 : Math.min(N, 6);
+  const rates = T1[row];
+  let c1 = 0;
+  const c1Detail = {};
+  F.forEach(f => {
+    const isDirect = f.source === 'Direct';
+    const isHL = f.product === 'HL';
+    const colIdx = (isDirect ? 0 : 2) + (isHL ? 0 : 1);
+    const rate = rates[colIdx];
+    c1 += rate;
+    const k = (isDirect ? 'Direct' : 'Connector/DSA') + ' ' + f.product;
+    if (!c1Detail[k]) c1Detail[k] = { count: 0, rate: rate, total: 0 };
+    c1Detail[k].count += 1;
+    c1Detail[k].total += rate;
+  });
+
+  // ---------- Component 2 ----------
+  let c2 = 0;
+  const c2Detail = {};
+  F.forEach(f => {
+    if (f.sanction >= 25) {
+      const bonus = T2[f.source + '-' + f.product] || 0;
+      c2 += bonus;
+      if (bonus > 0) {
+        const k = 'Direct ' + f.product;
+        if (!c2Detail[k]) c2Detail[k] = { count: 0, rate: bonus, total: 0 };
+        c2Detail[k].count += 1;
+        c2Detail[k].total += bonus;
+      }
+    }
+  });
+
+  // ---------- Component 3 + Component 5 ----------
+  // Files with disbursed >= 50 lac trigger Component 5 (flat ₹25,000) and are
+  // EXCLUDED from Component 3 bucket. They ARE included in achievement %.
+  const MEGA_THRESHOLD_LAC = 50;
+  const MEGA_BONUS_PER_FILE = 25000;
+  const buckets = { Direct: 0, Connector: 0, DSA: 0 };
+  let totalDisb = 0;        // for achievement % (includes mega)
+  let megaCount = 0;
+  let megaLacExcluded = 0;
+  F.forEach(f => {
+    totalDisb += f.disbursed;
+    if (f.disbursed >= MEGA_THRESHOLD_LAC) { megaCount++; megaLacExcluded += f.disbursed; }
+    else { buckets[f.source] += f.disbursed; }
+  });
+  P.forEach(p => {
+    totalDisb += p.disbursed;
+    if (p.disbursed >= MEGA_THRESHOLD_LAC) { megaCount++; megaLacExcluded += p.disbursed; }
+    else { buckets[p.source] += p.disbursed; }
+  });
+  const ach = target > 0 ? (totalDisb / target * 100) : 0;
+  const half = ach >= 100 ? 'gte100' : 'lt100';
+
+  let c3 = 0;
+  const c3Detail = [];
+  ['Direct', 'Connector', 'DSA'].forEach(src => {
+    const amt = buckets[src];
+    if (amt <= 0) return;
+    const idx = findBandIdx(amt);
+    const band = BANDS[idx];
+    const val = T3[half][src][idx];
+    let bucketInc = 0;
+    let note = '';
+    if (val === 'NA') {
+      bucketInc = 0;
+      note = 'NA (target <100% + band ≥45 lac → no incentive)';
+    } else if (band.pct) {
+      // amt is in lac → convert to rupees, then apply %
+      bucketInc = val * amt * 100000;
+      note = (val * 100).toFixed(2) + '% × ₹' + amt.toFixed(2) + ' lac';
+    } else {
+      bucketInc = val;
+      note = 'Flat (band ' + band.key + ' lac)';
+    }
+    c3 += bucketInc;
+    c3Detail.push({ src, amt, band: band.key, inc: bucketInc, note });
+  });
+
+  // ---------- Component 4: Login incentive ----------
+  const logins = parseInt(document.getElementById('logins').value, 10) || 0;
+  const freshDisbCount = F.filter(f => f.disbursed > 0).length;
+  let c4 = 0;
+  let c4Note = '';
+  if (logins > 0) {
+    // Find starting slab from login count
+    let startIdx = -1;
+    for (let i = 0; i < LOGIN_SLABS.length; i++) {
+      if (logins >= LOGIN_SLABS[i].minN && logins <= LOGIN_SLABS[i].maxN) {
+        startIdx = i;
+        break;
+      }
+    }
+    // Drop one slab at a time until condition is met
+    let appliedIdx = startIdx;
+    while (appliedIdx >= 0 && LOGIN_SLABS[appliedIdx].minFresh > freshDisbCount) {
+      appliedIdx--;
+    }
+    if (appliedIdx >= 0) {
+      const slab = LOGIN_SLABS[appliedIdx];
+      c4 = logins * slab.rate;
+      if (appliedIdx === startIdx) {
+        c4Note = `${logins} × ₹${slab.rate} (slab ${slab.name})`;
+      } else {
+        const start = LOGIN_SLABS[startIdx];
+        c4Note = `Starting slab ${start.name} needs ≥${start.minFresh} fresh disb (you have ${freshDisbCount}) — fell back to ${slab.name}. ${logins} × ₹${slab.rate}`;
+      }
+    }
+  }
+
+  // ---------- Component 5: Mega-file bonus ----------
+  const c5 = megaCount * MEGA_BONUS_PER_FILE;
+
+  const total = c1 + c2 + c3 + c4 + c5;
+
+  // ---------- Render results ----------
+  const c1DetailHtml = Object.keys(c1Detail).length === 0
+    ? '<div class="bd-row sub">No fresh files entered</div>'
+    : Object.entries(c1Detail).map(([k, v]) => `<div class="bd-row sub"><span>${k} — ${v.count} × ${inrFmt(v.rate)}</span><span>${inrFmt(v.total)}</span></div>`).join('');
+
+  const c2DetailHtml = Object.keys(c2Detail).length === 0
+    ? '<div class="bd-row sub">No qualifying fresh files (sanction ≥ ₹25 lac, Direct only)</div>'
+    : Object.entries(c2Detail).map(([k, v]) => `<div class="bd-row sub"><span>${k} — ${v.count} × ${inrFmt(v.rate)}</span><span>${inrFmt(v.total)}</span></div>`).join('');
+
+  const c3DetailHtml = c3Detail.length === 0
+    ? '<div class="bd-row sub">No disbursement entered</div>'
+    : c3Detail.map(d => `<div class="bd-row sub"><span>${d.src} · ₹${d.amt.toFixed(2)} lac · ${d.note}</span><span>${inrFmt(d.inc)}</span></div>`).join('');
+
+  document.getElementById('results').innerHTML = `
+    <div class="results">
+      <div class="results-label">Total incentive (₹)</div>
+      <div class="total-amt">${inrFmt(total)}</div>
+      <div>
+        <span class="ach-pill ${ach >= 100 ? 'ach-good' : 'ach-warn'}">
+          ${target > 0 ? 'Target achievement: ' + ach.toFixed(1) + '%' : 'Target not set'}
+        </span>
+      </div>
+    </div>
+    <div class="breakdown">
+      <div class="bd-row"><strong>1 · Per-file incentive</strong><strong>${inrFmt(c1)}</strong></div>
+      <div class="bd-row sub">Total fresh files: ${N}${N > 0 ? ' → row ' + row + ' rates' : ''}</div>
+      ${c1DetailHtml}
+
+      <div class="bd-row" style="margin-top:6px;"><strong>2 · Sanction ≥ ₹25 lac bonus</strong><strong>${inrFmt(c2)}</strong></div>
+      ${c2DetailHtml}
+
+      <div class="bd-row" style="margin-top:6px;"><strong>3 · Disbursement incentive</strong><strong>${inrFmt(c3)}</strong></div>
+      <div class="bd-row sub">Total disb: ₹${totalDisb.toFixed(2)} lac · Target ach ${ach.toFixed(1)}% · Using ${ach >= 100 ? '≥100%' : '<100%'} grid</div>
+      ${megaCount > 0 ? `<div class="bd-row sub">Grid basis excludes ${megaCount} mega-file(s) totaling ₹${megaLacExcluded.toFixed(2)} lac</div>` : ''}
+      ${c3DetailHtml}
+
+      <div class="bd-row" style="margin-top:6px;"><strong>4 · Login incentive</strong><strong>${inrFmt(c4)}</strong></div>
+      ${logins > 0 ? `<div class="bd-row sub">${c4Note}</div>` : '<div class="bd-row sub">No logins entered</div>'}
+
+      <div class="bd-row" style="margin-top:6px;"><strong>5 · Mega-file bonus (single file ≥ ₹50 lac)</strong><strong>${inrFmt(c5)}</strong></div>
+      ${megaCount > 0 ? `<div class="bd-row sub">${megaCount} × ₹25,000 (file disb ≥ ₹50 lac, paid unconditionally)</div>` : '<div class="bd-row sub">No file with disbursement ≥ ₹50 lac</div>'}
+
+      <div class="bd-row total"><span>Total incentive</span><span>${inrFmt(total)}</span></div>
+    </div>
+  `;
+
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  save();
+}
+
+/* ============================================================
+   PERSISTENCE
+   ============================================================ */
+function save() {
+  try {
+    localStorage.setItem('incCalcState_v1', JSON.stringify({
+      target: document.getElementById('target').value,
+      logins: document.getElementById('logins').value,
+      fresh: fresh,
+      prev: prev
+    }));
+  } catch (e) { /* ignore */ }
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem('incCalcState_v1') || '{}');
+    if (s.target) document.getElementById('target').value = s.target;
+    if (s.logins) document.getElementById('logins').value = s.logins;
+    if (Array.isArray(s.fresh)) fresh = s.fresh;
+    if (Array.isArray(s.prev))  prev  = s.prev;
+  } catch (e) { /* ignore */ }
+}
+function resetAll() {
+  if (!confirm('Clear all entries on this device?')) return;
+  document.getElementById('target').value = '';
+  document.getElementById('logins').value = '';
+  fresh = []; prev = [];
+  document.getElementById('results').innerHTML = '';
+  save(); render();
+}
+
+document.getElementById('target').addEventListener('input', save);
+document.getElementById('logins').addEventListener('input', save);
+load();
+render();
+</script>
+</body>
+</html>
