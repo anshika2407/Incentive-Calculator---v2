@@ -39,6 +39,10 @@
   .ach-good { background: #1f7a4a; }
   .ach-warn { background: #b87333; }
   .empty { color: #8898ab; font-size: 13px; text-align: center; padding: 14px 0; }
+  .input-error { border-color: #b04030 !important; background: #fef5f4; }
+  .err-msg { color: #b04030; font-size: 11px; margin-top: 4px; display: none; font-weight: 500; }
+  .err-banner { background: #fef1ec; border: 1px solid #dc7565; color: #6d1f13; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
+  .calc-btn:disabled { background: #8898ab; cursor: not-allowed; box-shadow: none; }
   .footer-note { font-size: 11px; color: #8898ab; text-align: center; margin-top: 4px; }
   @media (max-width: 360px) {
     .row { grid-template-columns: 1fr; }
@@ -54,6 +58,7 @@
     <h2>Monthly target</h2>
     <label>Target (₹ lac)</label>
     <input type="number" id="target" step="0.01" min="0" inputmode="decimal" placeholder="e.g. 45">
+    <div class="err-msg" id="target-err">Target must be greater than 0</div>
   </div>
 
   <div class="card">
@@ -91,7 +96,7 @@
 //   value = [Direct HL, Direct LAP, Conn/DSA HL, Conn/DSA LAP]
 const T1 = {
   1: [0, 0, 0, 0],
-  2: [750, 375, 375, 188],
+  2: [750, 375, 375, 185],
   3: [1000, 500, 500, 250],
   4: [1200, 600, 600, 300],
   5: [1500, 750, 750, 375],
@@ -100,11 +105,26 @@ const T1 = {
 
 // Component 2: bonus per fresh docket with sanction >= 25 lac
 const T2 = {
-  'Direct-HL':    2000,
-  'Direct-LAP':   1000,
+  'Direct-HL':        2000,
+  'Direct-LAP':       1000,
+  'InternalTopUp-HL': 2000,
+  'InternalTopUp-LAP':1000,
   'Connector-HL': 0, 'Connector-LAP': 0,
   'DSA-HL':       0, 'DSA-LAP':       0
 };
+
+// Source helpers: Direct & Internal Top Up share Component 1/2/3 treatment
+function isDirectGroup(source) {
+  return source === 'Direct' || source === 'InternalTopUp';
+}
+function sourceLabel(source) {
+  if (source === 'Direct') return 'Direct';
+  if (source === 'InternalTopUp') return 'Internal Top Up';
+  return 'Connector/DSA';
+}
+function bucketName(source) {
+  return isDirectGroup(source) ? 'Direct' : source;
+}
 
 // Component 4: login incentive slabs (Direct column only — applies to all logins)
 // minFresh = required count of fresh files disbursed to use this slab; else drop one slab
@@ -186,6 +206,7 @@ function render() {
             <label>Source</label>
             <select onchange="fresh[${i}].source=this.value; save()">
               <option value="Direct"${f.source === 'Direct' ? ' selected' : ''}>Direct</option>
+              <option value="InternalTopUp"${f.source === 'InternalTopUp' ? ' selected' : ''}>Internal Top Up (Higher or Same ROI)</option>
               <option value="Connector"${f.source === 'Connector' ? ' selected' : ''}>Connector</option>
               <option value="DSA"${f.source === 'DSA' ? ' selected' : ''}>DSA</option>
             </select>
@@ -201,11 +222,12 @@ function render() {
         <div class="row">
           <div>
             <label>Sanction (₹ lac)</label>
-            <input type="number" step="0.01" min="0" inputmode="decimal" value="${f.sanction}" oninput="fresh[${i}].sanction=this.value; save()" placeholder="e.g. 30">
+            <input type="number" step="0.01" min="0" inputmode="decimal" id="sanction-${i}" value="${f.sanction}" oninput="fresh[${i}].sanction=this.value; validateFresh(); save()" placeholder="e.g. 30">
+            <div class="err-msg" id="sanction-err-${i}">Sanction must be ≥ disbursement</div>
           </div>
           <div>
             <label>Disbursed (₹ lac)</label>
-            <input type="number" step="0.01" min="0" inputmode="decimal" value="${f.disbursed}" oninput="fresh[${i}].disbursed=this.value; save()" placeholder="e.g. 25">
+            <input type="number" step="0.01" min="0" inputmode="decimal" value="${f.disbursed}" oninput="fresh[${i}].disbursed=this.value; validateFresh(); save()" placeholder="e.g. 25">
           </div>
         </div>
       </div>
@@ -223,6 +245,7 @@ function render() {
             <label>Source</label>
             <select onchange="prev[${i}].source=this.value; save()">
               <option value="Direct"${p.source === 'Direct' ? ' selected' : ''}>Direct</option>
+              <option value="InternalTopUp"${p.source === 'InternalTopUp' ? ' selected' : ''}>Internal Top Up (Higher or Same ROI)</option>
               <option value="Connector"${p.source === 'Connector' ? ' selected' : ''}>Connector</option>
               <option value="DSA"${p.source === 'DSA' ? ' selected' : ''}>DSA</option>
             </select>
@@ -234,6 +257,8 @@ function render() {
         </div>
       </div>
     `).join('');
+
+  validateFresh();
 }
 
 /* ============================================================
@@ -252,6 +277,54 @@ function inrFmt(n) {
   return sign + '₹' + formatted;
 }
 
+function validateFresh() {
+  const messages = [];
+
+  // Target check
+  const targetEl = document.getElementById('target');
+  const targetVal = parseFloat(targetEl.value);
+  const targetErr = !targetEl.value || isNaN(targetVal) || targetVal <= 0;
+  targetEl.classList.toggle('input-error', targetErr);
+  const targetErrEl = document.getElementById('target-err');
+  if (targetErrEl) targetErrEl.style.display = targetErr ? 'block' : 'none';
+  if (targetErr) messages.push('Enter a monthly target greater than 0.');
+
+  // Fresh files: sanction < disbursed
+  const errList = [];
+  fresh.forEach((f, i) => {
+    const s = parseFloat(f.sanction)  || 0;
+    const d = parseFloat(f.disbursed) || 0;
+    const err = d > 0 && s < d;
+    const inputEl = document.getElementById('sanction-' + i);
+    const errEl   = document.getElementById('sanction-err-' + i);
+    if (inputEl) inputEl.classList.toggle('input-error', err);
+    if (errEl)   errEl.style.display = err ? 'block' : 'none';
+    if (err) errList.push(i + 1);
+  });
+  if (errList.length > 0) {
+    messages.push('Fix error(s) in fresh file(s): #' + errList.join(', #') + ' — sanction must be ≥ disbursement.');
+  }
+
+  const anyError = messages.length > 0;
+  const btn = document.querySelector('.calc-btn');
+  if (btn) btn.disabled = anyError;
+
+  let banner = document.getElementById('err-banner');
+  if (anyError) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'err-banner';
+      banner.className = 'err-banner';
+      const subtitle = document.querySelector('.subtitle');
+      subtitle.insertAdjacentElement('afterend', banner);
+    }
+    banner.innerHTML = '⚠ ' + messages.join(' &nbsp;·&nbsp; ') + ' Calculate is disabled until fixed.';
+  } else if (banner) {
+    banner.remove();
+  }
+  return !anyError;
+}
+
 function findBandIdx(amtLac) {
   for (let i = 0; i < BANDS.length; i++) {
     if (amtLac >= BANDS[i].min && amtLac < BANDS[i].max) return i;
@@ -263,14 +336,18 @@ function findBandIdx(amtLac) {
    CALCULATE
    ============================================================ */
 function calculate() {
+  if (!validateFresh()) { return; }  // block if any file has sanction < disbursed
   const target = parseFloat(document.getElementById('target').value) || 0;
 
-  const F = fresh.map(f => ({
+  const F_all = fresh.map(f => ({
     source:   f.source,
     product:  f.product,
     sanction: parseFloat(f.sanction)  || 0,
     disbursed:parseFloat(f.disbursed) || 0
   }));
+  // Files with disb <= 0 are entered but not counted (Change 3 + 4)
+  const F = F_all.filter(f => f.disbursed > 0);
+  const excludedFresh = F_all.length - F.length;
   const P = prev.map(p => ({
     source:   p.source,
     disbursed:parseFloat(p.disbursed) || 0
@@ -283,12 +360,12 @@ function calculate() {
   let c1 = 0;
   const c1Detail = {};
   F.forEach(f => {
-    const isDirect = f.source === 'Direct';
+    const isDir = isDirectGroup(f.source);
     const isHL = f.product === 'HL';
-    const colIdx = (isDirect ? 0 : 2) + (isHL ? 0 : 1);
+    const colIdx = (isDir ? 0 : 2) + (isHL ? 0 : 1);
     const rate = rates[colIdx];
     c1 += rate;
-    const k = (isDirect ? 'Direct' : 'Connector/DSA') + ' ' + f.product;
+    const k = sourceLabel(f.source) + ' ' + f.product;
     if (!c1Detail[k]) c1Detail[k] = { count: 0, rate: rate, total: 0 };
     c1Detail[k].count += 1;
     c1Detail[k].total += rate;
@@ -302,7 +379,7 @@ function calculate() {
       const bonus = T2[f.source + '-' + f.product] || 0;
       c2 += bonus;
       if (bonus > 0) {
-        const k = 'Direct ' + f.product;
+        const k = sourceLabel(f.source) + ' ' + f.product;
         if (!c2Detail[k]) c2Detail[k] = { count: 0, rate: bonus, total: 0 };
         c2Detail[k].count += 1;
         c2Detail[k].total += bonus;
@@ -322,12 +399,12 @@ function calculate() {
   F.forEach(f => {
     totalDisb += f.disbursed;
     if (f.disbursed >= MEGA_THRESHOLD_LAC) { megaCount++; megaLacExcluded += f.disbursed; }
-    else { buckets[f.source] += f.disbursed; }
+    else { buckets[bucketName(f.source)] += f.disbursed; }
   });
   P.forEach(p => {
     totalDisb += p.disbursed;
     if (p.disbursed >= MEGA_THRESHOLD_LAC) { megaCount++; megaLacExcluded += p.disbursed; }
-    else { buckets[p.source] += p.disbursed; }
+    else { buckets[bucketName(p.source)] += p.disbursed; }
   });
   const ach = target > 0 ? (totalDisb / target * 100) : 0;
   const half = ach >= 100 ? 'gte100' : 'lt100';
@@ -418,7 +495,7 @@ function calculate() {
     </div>
     <div class="breakdown">
       <div class="bd-row"><strong>1 · Per-file incentive</strong><strong>${inrFmt(c1)}</strong></div>
-      <div class="bd-row sub">Total fresh files: ${N}${N > 0 ? ' → row ' + row + ' rates' : ''}</div>
+      <div class="bd-row sub">Effective fresh files: ${N}${excludedFresh > 0 ? ' (' + excludedFresh + ' excluded — zero/blank disbursement)' : ''}${N > 0 ? ' → row ' + row + ' rates' : ''}</div>
       ${c1DetailHtml}
 
       <div class="bd-row" style="margin-top:6px;"><strong>2 · Sanction ≥ ₹25 lac bonus</strong><strong>${inrFmt(c2)}</strong></div>
@@ -474,7 +551,7 @@ function resetAll() {
   save(); render();
 }
 
-document.getElementById('target').addEventListener('input', save);
+document.getElementById('target').addEventListener('input', () => { validateFresh(); save(); });
 document.getElementById('logins').addEventListener('input', save);
 load();
 render();
