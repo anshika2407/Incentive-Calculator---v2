@@ -57,8 +57,8 @@
   <div class="card">
     <h2>Monthly target</h2>
     <label>Target (₹ lac)</label>
-    <input type="number" id="target" step="0.01" min="0" inputmode="decimal" placeholder="e.g. 45">
-    <div class="err-msg" id="target-err">Target must be greater than 0</div>
+    <input type="number" id="target" step="0.01" min="15" max="40" inputmode="decimal" placeholder="Between 15 and 40">
+    <div class="err-msg" id="target-err">Target must be between 15 and 40 (₹ lac)</div>
   </div>
 
   <div class="card">
@@ -283,11 +283,11 @@ function validateFresh() {
   // Target check
   const targetEl = document.getElementById('target');
   const targetVal = parseFloat(targetEl.value);
-  const targetErr = !targetEl.value || isNaN(targetVal) || targetVal <= 0;
+  const targetErr = !targetEl.value || isNaN(targetVal) || targetVal < 15 || targetVal > 40;
   targetEl.classList.toggle('input-error', targetErr);
   const targetErrEl = document.getElementById('target-err');
   if (targetErrEl) targetErrEl.style.display = targetErr ? 'block' : 'none';
-  if (targetErr) messages.push('Enter a monthly target greater than 0.');
+  if (targetErr) messages.push('Enter a monthly target between 15 and 40 (₹ lac).');
 
   // Fresh files: sanction < disbursed
   const errList = [];
